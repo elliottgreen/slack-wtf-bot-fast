@@ -1,0 +1,17 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Flask stuff:
+instance/
+.webassets-cache
+
+# pytest results
+coverage/
+coverage.*
+
+# Environments
+.env
+.venv
+env/
