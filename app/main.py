@@ -16,11 +16,6 @@ fap = FastAPI()
 def get_env_vars():
     return config.Settings()
 
-@fap.get('/info')
-async def info(settings: config.Settings = Depends(get_env_vars)):
-    return{ "Slack Token" : settings.SLACK_TOKEN,
-            "Data URL" : settings.DATA_URL,
-            }
 
 @fap.post('/define')
 async def define(text: str = Form(...), token: str = Form(...), 
@@ -35,39 +30,65 @@ async def define(text: str = Form(...), token: str = Form(...),
                 detail="Not Authorized",
                 )
 
-    raw = requests.get(settings.DATA_URL)
+    # Retrieve the contents of the CSV at DATA_URL
+    raw_data = requests.get(settings.DATA_URL)
 
-    decoded = raw.content.decode('utf-8')
+    # Decode utf-8 data to ascii text
+    decoded_data = raw_data.content.decode('utf-8')
 
-    reader = csv.reader(decoded.split('\n'), delimiter=',')
+    # Parse decoded data into a table by newline breaks
+    reader = csv.reader(decoded_data.split('\n'), delimiter=',')
 
-    data = [r for r in reader if len(r) > 1]
+    # Seperate parsed data into a list
+    all_definitions = [row for row in reader if len(row) > 1]
 
-    term_dict = {}
+    # Instantiate an empty dictionary to hold 
+    lexicon = {}
 
-    for d in data:
+    # Loop to build terms from csv at DATA_URL
+    for terms in all_definitions:
 
-        acroynm = d[0].lower()
-        definition = d[1].strip()
-        context = ''
-        notes = ''
-        if len(d[2]) > 0:
-            context = "\n\t- " + d[2].strip()
+        # Force the acronym to be in lower case
+        acroynm = terms[0].lower()
+
+        # Drop any leading or training spaces
+        definition = terms[1].strip()
+
+        # Add the context of the acronym if provided. 
+        # Leave the context blank otherwise. 
+        if len(terms[2]) > 0:
+            context = "\n\t- " + terms[2].strip()
+        else:
+            context = ''
+
+        # Add the notes of the acronym if provided. 
+        # Leave the notes blank otherwise. 
         if len(d[3]) > 0:
-            notes = "\n\t- " + d[3].strip()
+            notes = "\n\t- " + terms[3].strip()
+        else:
+            notes = ''
+
+        #Build the full definition which includes:
+        # 1. Definition
+        # 2. Context
+        # 3. Notes
         full_data = "{}{}{}".format(definition, context, notes)
 
-        existing = term_dict.get(acroynm, None)
+        # Check the lexicon dictionary built earlier for term 
+        # Set return type as None with get method
+        existing = lexicon.get(acroynm, None)
 
+        # Add term to dict if it is not already 
+        # full_data is cast as a list in order to squeeze into the dict
         if not existing:
-            term_dict[acroynm] = [full_data]
+            lexicon[acroynm] = [full_data]
 
         else:
-            term_dict[acroynm] = existing + [full_data]
+            lexicon[acroynm] = existing + [full_data]
 
     try:
 
-        acroynm_defined = term_dict[text.lower()]
+        acroynm_defined = lexicon[text.lower()]
 
         if len(acroynm_defined) > 1:
             response = ' - ' + '; \n - '.join(acroynm_defined)
@@ -77,6 +98,7 @@ async def define(text: str = Form(...), token: str = Form(...),
 
         response = text + '\n' + response
 
+    # If the provided acronym is not found, return this string. 
     except KeyError:
         response = """
         Entry for '{}' not found! Acronyms may be added at
